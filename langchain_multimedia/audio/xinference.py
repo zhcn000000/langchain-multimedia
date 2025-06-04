@@ -1,0 +1,188 @@
+import tempfile
+from pathlib import Path
+from typing import List, Optional, Any, Dict
+from urllib.request import urlopen
+
+import requests
+import uuid
+
+from langchain_core.callbacks import CallbackManagerForLLMRun
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import BaseMessage, AIMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
+
+
+class XinferenceTextToAudio(BaseChatModel):
+    """XinferenceAudio is a chat model that uses xinference to generate audio from text prompts."""
+
+    client: Optional[Any] = None
+    server_url: Optional[str]
+    """URL of the xinference server"""
+    model_uid: Optional[str]
+    """UID of the launched model"""
+    model_kwargs: Dict[str, Any]
+    """Keyword arguments to be passed to xinference.LLM"""
+
+    def __init__(
+        self,
+        server_url: str,
+        model_uid: str,
+        api_key: Optional[str] = None,
+        **model_kwargs: Any,
+    ):
+        try:
+            from xinference.client import RESTfulClient
+        except ImportError:
+            try:
+                from xinference_client import RESTfulClient
+            except ImportError as e:
+                raise ImportError(
+                    "Could not import RESTfulClient from xinference. Please install it"
+                    " with `pip install xinference` or `pip install xinference_client`."
+                ) from e
+        client: RESTfulClient
+        model_kwargs = model_kwargs or {}
+
+        super().__init__(**{"server_url": server_url, "model_uid": model_uid, "model_kwargs": model_kwargs})
+        self._headers = {}
+        self._check_cluster_authenticated()
+        if api_key and self._cluster_authed:
+            self._headers["Authorization"] = f"Bearer {api_key}"
+        self.client = RESTfulClient(server_url)
+
+    @property
+    def _llm_type(self) -> str:
+        return "xinference-text-to-audio"
+
+    @property
+    def _identifying_params(self) -> Dict[str, Any]:
+        return {"server_url": self.server_url, "model_uid": self.model_uid}
+
+    def _check_cluster_authenticated(self) -> None:
+        url = f"{self.server_url}/v1/cluster/auth"
+        resp = requests.get(url)
+        if resp.status_code not in (200, 404):
+            raise RuntimeError(f"Cluster auth failed: {resp.text}")
+        self._cluster_authed = resp.status_code == 200 and resp.json().get("auth", False)
+
+    def _generate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        results = []
+        for message in messages:
+            ai_msg = self._convert_text_to_audio(message)
+            gen = ChatGeneration(message=ai_msg)
+            results.append(gen)
+        return ChatResult(generations=results)
+
+    def _convert_text_to_audio(self, message: BaseMessage) -> AIMessage:
+        prompt = message.text()
+        model = self.client.get_model(self.model_uid)
+        audio = model.speech(input=prompt, **self.model_kwargs)
+        cache_dir = Path(tempfile.gettempdir()) / "langchain_multimedia"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        name = str(uuid.uuid4())
+        with open(str(cache_dir / f"{name}.mp3"), "wb") as f:
+            f.write(audio)
+        audio_url = f"file://{str(cache_dir / f'{name}.mp3')}"
+        return AIMessage(
+            content=[
+                {
+                    "type": "audio_url",
+                    "audio_url": {"url": audio_url},
+                }
+            ]
+        )
+
+
+class XinferenceAudioToText(BaseChatModel):
+    """XinferenceAudioToText is a chat model that uses xinference to transcribe audio to text."""
+
+    client: Optional[Any] = None
+    server_url: Optional[str]
+    """URL of the xinference server"""
+    model_uid: Optional[str]
+    """UID of the launched model"""
+    model_kwargs: Dict[str, Any]
+    """Keyword arguments to be passed to xinference.LLM"""
+
+    def __init__(
+        self,
+        server_url: str,
+        model_uid: str,
+        api_key: Optional[str] = None,
+        **model_kwargs: Any,
+    ):
+        try:
+            from xinference.client import RESTfulClient
+        except ImportError:
+            try:
+                from xinference_client import RESTfulClient
+            except ImportError as e:
+                raise ImportError(
+                    "Could not import RESTfulClient from xinference. Please install it"
+                    " with `pip install xinference` or `pip install xinference_client`."
+                ) from e
+        client: RESTfulClient
+        model_kwargs = model_kwargs or {}
+
+        super().__init__(**{"server_url": server_url, "model_uid": model_uid, "model_kwargs": model_kwargs})
+        self._headers = {}
+        self._check_cluster_authenticated()
+        if api_key and self._cluster_authed:
+            self._headers["Authorization"] = f"Bearer {api_key}"
+        self.client = RESTfulClient(server_url)
+
+    @property
+    def _llm_type(self) -> str:
+        return "xinference-audio-to-text"
+
+    @property
+    def _identifying_params(self) -> Dict[str, Any]:
+        return {"server_url": self.server_url, "model_uid": self.model_uid}
+
+    def _check_cluster_authenticated(self) -> None:
+        url = f"{self.server_url}/v1/cluster/auth"
+        resp = requests.get(url)
+        if resp.status_code not in (200, 404):
+            raise RuntimeError(f"Cluster auth failed: {resp.text}")
+        self._cluster_authed = resp.status_code == 200 and resp.json().get("auth", False)
+
+    def _generate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        results = []
+        for message in messages:
+            ai_msg = self._convert_text_to_audio(message)
+            gen = ChatGeneration(message=ai_msg)
+            results.append(gen)
+        return ChatResult(generations=results)
+
+    def _convert_audio_to_text(self, message: BaseMessage, **kwargs) -> AIMessage:
+        message = message.content
+        if isinstance(message, str):
+            raise ValueError("Audio is required for convert text.")
+        model = self.client.get_model(self.model_uid)
+        audio_url = None
+        for block in message:
+            if isinstance(block, str):
+                continue
+            elif block["type"] == "audio_url":
+                audio_url = block["audio_url"]["url"]
+                break
+        if audio_url is None:
+            raise ValueError("Audio is required for convert text.")
+        audio = urlopen(audio_url).read()
+        if "translations" in kwargs and kwargs["translations"]:
+            text = model.translations(audio=audio, **self.model_kwargs)["text"]
+        else:
+            text: str = model.transcriptions(audio=audio, **self.model_kwargs)["text"]
+        return AIMessage(content=[{"type": "text", "text": text}])
