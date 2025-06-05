@@ -88,7 +88,7 @@ In `tests/api.json`, you can configure:
 ## Tested Models
 
 - Currently only OpenAI and XInference image and audio models have been tested; other models are not yet tested.
-- 
+
 ## Project Structure
 ```
 .
@@ -102,4 +102,3 @@ In `tests/api.json`, you can configure:
 
 ## License
 This project is licensed under the MIT License. 
-```
