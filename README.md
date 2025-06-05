@@ -46,7 +46,7 @@ from langchain_multimedia.audio import OpenAITextToAudio
 model = OpenAITextToAudio(
     base_url="https://api.example.com",
     api_key="YOUR_API_KEY",
-    model="whisper-1",
+    model="voice-1",
 )
 
 message = HumanMessage(content=[{"type": "text", "text": "Hello, world"}])
