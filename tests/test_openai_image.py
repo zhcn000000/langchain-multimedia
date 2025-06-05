@@ -18,7 +18,7 @@ def test_generate_audio_creates_file_and_returns_ai_message():
         model=cfg["image-model"],
     )
     text = "A beautiful sunset over the mountains"
-    # 构造消息
+
     message = HumanMessage(
         content=[
             {"type": "text", "text": text},
