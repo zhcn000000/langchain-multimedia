@@ -1,7 +1,7 @@
-# LangChain Multimedia Project
+# LangChain Multimedia
 
 ## Overview
-This project leverages [LangChain](https://github.com/langchain/langchain) to process and generate multimedia content (audio, video, images) with plugin-based extensions and custom model integration.
+This project leverages [LangChain](https://github.com/langchain-ai/langchain) to process and generate multimedia content (audio, video, images) with plugin-based extensions and custom model integration.
 
 ## Features
 - Text-to-Audio/Video/Image  
