@@ -12,7 +12,6 @@ XINFERENCE_HOST = "localhost"
 XINFERENCE_PORT = 44000
 
 def test_generate_audio():
-    # 构造模型实例
     model = OpenAITextToAudio(
         base_url=cfg["base_url"],
         api_key=cfg["api_key"],
@@ -20,7 +19,7 @@ def test_generate_audio():
     )
 
     text = "Hallo World"
-    # 构造消息
+
     message = HumanMessage(
         content=[
             {"type": "text", "text": text},
