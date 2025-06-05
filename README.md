@@ -1,6 +1,3 @@
-下面是一份英文版的 `README.md` 示例，包含项目简介、安装、使用示例及调用结果。
-
-```markdown
 # LangChain Multimedia Project
 
 ## Overview
