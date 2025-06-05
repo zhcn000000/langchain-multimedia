@@ -1,4 +1,5 @@
 import tempfile
+import magic
 from pathlib import Path
 from typing import List, Optional, Any, Dict
 from urllib.request import urlopen
@@ -86,7 +87,13 @@ class XinferenceTextToAudio(BaseChatModel):
         cache_dir = Path(tempfile.gettempdir()) / "langchain_multimedia"
         cache_dir.mkdir(parents=True, exist_ok=True)
         name = str(uuid.uuid4())
-        with open(str(cache_dir / f"{name}.mp3"), "wb") as f:
+        mime = magic.from_buffer(audio, mime=True)
+        ext = mime.split("/")[-1]
+        if ext == "x-wav":
+            ext = "wav"
+        elif ext == "mpeg":
+            ext = "mp3"
+        with open(str(cache_dir / f"{name}.{ext}"), "wb") as f:
             f.write(audio)
         audio_url = f"file://{str(cache_dir / f'{name}.mp3')}"
         return AIMessage(
@@ -145,13 +152,6 @@ class XinferenceAudioToText(BaseChatModel):
     def _identifying_params(self) -> Dict[str, Any]:
         return {"server_url": self.server_url, "model_uid": self.model_uid}
 
-    def _check_cluster_authenticated(self) -> None:
-        url = f"{self.server_url}/v1/cluster/auth"
-        resp = requests.get(url)
-        if resp.status_code not in (200, 404):
-            raise RuntimeError(f"Cluster auth failed: {resp.text}")
-        self._cluster_authed = resp.status_code == 200 and resp.json().get("auth", False)
-
     def _generate(
         self,
         messages: List[BaseMessage],
@@ -161,7 +161,7 @@ class XinferenceAudioToText(BaseChatModel):
     ) -> ChatResult:
         results = []
         for message in messages:
-            ai_msg = self._convert_text_to_audio(message)
+            ai_msg = self._convert_audio_to_text(message)
             gen = ChatGeneration(message=ai_msg)
             results.append(gen)
         return ChatResult(generations=results)
@@ -181,8 +181,12 @@ class XinferenceAudioToText(BaseChatModel):
         if audio_url is None:
             raise ValueError("Audio is required for convert text.")
         audio = urlopen(audio_url).read()
-        if "translations" in kwargs and kwargs["translations"]:
-            text = model.translations(audio=audio, **self.model_kwargs)["text"]
+        translation = False
+        if "translation" in kwargs:
+            kwargs.pop("translation")
+            translation = bool(kwargs["translation"])
+        if translation:
+            text: str = model.translations(audio=audio, **kwargs)["text"]
         else:
-            text: str = model.transcriptions(audio=audio, **self.model_kwargs)["text"]
+            text: str = model.transcriptions(audio=audio, **kwargs)["text"]
         return AIMessage(content=[{"type": "text", "text": text}])

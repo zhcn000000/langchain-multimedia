@@ -1,6 +1,10 @@
+import tempfile
+import uuid
+from pathlib import Path
 from typing import List, Optional, Any, Dict
 from urllib.request import urlopen
 
+import magic
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, AIMessage
@@ -70,7 +74,7 @@ class XinferenceTextToImage(BaseChatModel):
     ) -> ChatResult:
         results = []
         for message in messages:
-            ai_msg = self._convert_text_to_audio(message)
+            ai_msg = self._convert_text_to_image(message)
             gen = ChatGeneration(message=ai_msg)
             results.append(gen)
         return ChatResult(generations=results)
@@ -89,10 +93,23 @@ class XinferenceTextToImage(BaseChatModel):
             raise ValueError("Prompt is required for image generation.")
         if input_image_url is not None:
             input_image = urlopen(input_image_url).read()
-            image = model.image_to_image(prompt=prompt, image=input_image, **kwargs)
+            response = model.image_to_image(prompt=prompt, image=input_image, **kwargs)
         else:
-            image = model.text_to_image(prompt=prompt, **kwargs)
-        image_url = "file://" + image["data"]["url"]
+            response = model.text_to_image(prompt=prompt, **kwargs)
+
+        output_image_url = response["data"]["url"]
+        if output_image_url.startwith("/"):
+            output_image_url = "file://" + output_image_url
+
+        image = urlopen(output_image_url).read()
+        cache_dir = Path(tempfile.gettempdir()) / "langchain_multimedia"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        mime = magic.from_buffer(image, mime=True)
+        ext = mime.split("/")[-1]
+        filename = cache_dir / f"{uuid.uuid4()}.{ext}"
+        with open(filename, "wb") as f:
+            f.write(image)
+        image_url = f"file://{filename}"
         return AIMessage(
             content=[
                 {
@@ -167,7 +184,7 @@ class XinferenceImageToText(BaseChatModel):
     ) -> ChatResult:
         results = []
         for message in messages:
-            ai_msg = self._convert_text_to_audio(message)
+            ai_msg = self._convert_image_to_text(message)
             gen = ChatGeneration(message=ai_msg)
             results.append(gen)
         return ChatResult(generations=results)

@@ -70,7 +70,7 @@ class XinferenceTextToVideo(BaseChatModel):
     ) -> ChatResult:
         results = []
         for message in messages:
-            ai_msg = self._convert_text_to_audio(message)
+            ai_msg = self._convert_text_to_video(message)
             gen = ChatGeneration(message=ai_msg)
             results.append(gen)
         return ChatResult(generations=results)

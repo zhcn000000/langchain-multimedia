@@ -4,11 +4,12 @@ from pathlib import Path
 from urllib.request import urlopen
 from typing import List, Any, Dict, Optional
 
+import magic
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_openai.chat_models.base import BaseChatOpenAI
 from langchain_core.messages import BaseMessage, AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
-
+from io import BytesIO
 
 class OpenAITextToAudio(BaseChatOpenAI):
     """Generate audio from text prompts using OpenAI TTS API."""
@@ -30,24 +31,30 @@ class OpenAITextToAudio(BaseChatOpenAI):
     ) -> ChatResult:
         results = []
         for message in messages:
-            ai_msg = self._convert_text_to_audio(message)
+            ai_msg = self._convert_text_to_audio(message,**kwargs)
             gen = ChatGeneration(message=ai_msg)
             results.append(gen)
         return ChatResult(generations=results)
 
-    def _convert_text_to_audio(self, message: BaseMessage) -> AIMessage:
+    def _convert_text_to_audio(self, message: BaseMessage,**kwargs) -> AIMessage:
         # Extract the first user message as text prompt
         prompt = message.text()
 
         # Call OpenAI TTS endpoint
-        audio_data = self.root_client.audio.speech.create(model=self.model_name, input=prompt, **kwargs).content
+        audio = self.root_client.audio.speech.create(model=self.model_name, input=prompt, **kwargs).content
 
         # Save audio to a temp file
         cache_dir = Path(tempfile.gettempdir()) / "langchain_multimedia"
         cache_dir.mkdir(parents=True, exist_ok=True)
-        filename = cache_dir / f"{uuid.uuid4()}.mp3"
+        mime = magic.from_buffer(audio, mime=True)
+        ext = mime.split("/")[-1]
+        if ext == "x-wav":
+            ext = "wav"
+        elif ext == "mpeg":
+            ext = "mp3"
+        filename = cache_dir / f"{uuid.uuid4()}.{ext}"
         with open(filename, "wb") as f:
-            f.write(audio_data)
+            f.write(audio)
 
         # Return an AIMessage containing a local file URL
         audio_url = f"file://{filename}"
@@ -94,8 +101,14 @@ class OpenAIAudioToText(BaseChatOpenAI):
         audio_bytes = urlopen(audio_url).read()
 
         # Call OpenAI Whisper transcription endpoint
-
-        resp = self.root_client.audio.transcriptions.create(model=self.model_name, file=audio_bytes, **kwargs)
+        translation = False
+        if "translation" in kwargs:
+            kwargs.pop("translation")
+            translation = bool(kwargs["translation"])
+        if translation:
+            resp = self.root_client.audio.translations.create(model=self.model_name, file=audio_bytes, **kwargs)
+        else:
+            resp = self.root_client.audio.transcriptions.create(model=self.model_name, file=audio_bytes, **kwargs)
         text = resp.text
 
         # Return the transcribed text as AIMessage

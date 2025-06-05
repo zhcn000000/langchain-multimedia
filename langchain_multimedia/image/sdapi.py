@@ -3,6 +3,7 @@ import tempfile
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.request import urlopen
 
 import requests
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -27,7 +28,7 @@ class SDAPITextToImage(BaseChatModel):
     def __init__(
         self,
         server_url: str,
-        endpoint: str = "/sdapi/v1/txt2img",
+        endpoint: str = "/sdapi/v1",
         **model_kwargs: Any,
     ):
         super().__init__({"server_url": server_url, "endpoint": endpoint, "model_kwargs": model_kwargs})
@@ -60,8 +61,20 @@ class SDAPITextToImage(BaseChatModel):
     def _convert_text_to_image(self, message: BaseMessage, **kwargs: Any) -> AIMessage:
         # Prepare request payload
         prompt = message.text()
-        payload = {"prompt": prompt, **self.model_kwargs, **kwargs}
-        url = f"{self.server_url}{self.endpoint}"
+        input_image_url = None
+        if not isinstance(message, str):
+            for block in message.content:
+                if not isinstance(block, str) and block["type"] == "image_url":
+                    input_image_url = block["image_url"]["url"]
+                    break
+        payload={"prompt":prompt,**self.model_kwargs, **kwargs}
+        if input_image_url is None:
+            endpoint = self.endpoint+"/txt2img"
+        else:
+            input_image = urlopen(input_image_url).read()
+            payload["init_images"] = [base64.b64encode(input_image).decode("utf-8")]
+            endpoint = self.endpoint+"/img2img"
+        url = f"{self.server_url}{endpoint}"
         resp = requests.post(url, json=payload)
         resp.raise_for_status()
         data = resp.json()
