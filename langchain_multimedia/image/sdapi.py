@@ -53,7 +53,7 @@ class SDAPITextToImage(BaseChatModel):
     ) -> ChatResult:
         results = []
         for message in messages:
-            ai_msg = self._convert_text_to_audio(message)
+            ai_msg = self._convert_text_to_image(message)
             gen = ChatGeneration(message=ai_msg)
             results.append(gen)
         return ChatResult(generations=results)
@@ -61,19 +61,20 @@ class SDAPITextToImage(BaseChatModel):
     def _convert_text_to_image(self, message: BaseMessage, **kwargs: Any) -> AIMessage:
         # Prepare request payload
         prompt = message.text()
+        message = message.content
         input_image_url = None
         if not isinstance(message, str):
-            for block in message.content:
-                if not isinstance(block, str) and block["type"] == "image_url":
-                    input_image_url = block["image_url"]["url"]
+            for block in message:
+                if not isinstance(block, str) and block.get("type") == "image_url":
+                    input_image_url = block.get("image_url", {}).get("url")
                     break
-        payload={"prompt":prompt,**self.model_kwargs, **kwargs}
+        payload = {"prompt": prompt, **self.model_kwargs, **kwargs}
         if input_image_url is None:
-            endpoint = self.endpoint+"/txt2img"
+            endpoint = self.endpoint + "/txt2img"
         else:
             input_image = urlopen(input_image_url).read()
             payload["init_images"] = [base64.b64encode(input_image).decode("utf-8")]
-            endpoint = self.endpoint+"/img2img"
+            endpoint = self.endpoint + "/img2img"
         url = f"{self.server_url}{endpoint}"
         resp = requests.post(url, json=payload)
         resp.raise_for_status()

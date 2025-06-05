@@ -1,7 +1,7 @@
 import tempfile
 import magic
 from pathlib import Path
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Mapping
 from urllib.request import urlopen
 
 import requests
@@ -26,8 +26,8 @@ class XinferenceTextToAudio(BaseChatModel):
 
     def __init__(
         self,
-        server_url: str,
-        model_uid: str,
+        server_url: Optional[str] = None,
+        model_uid: Optional[str] = None,
         api_key: Optional[str] = None,
         **model_kwargs: Any,
     ):
@@ -41,30 +41,58 @@ class XinferenceTextToAudio(BaseChatModel):
                     "Could not import RESTfulClient from xinference. Please install it"
                     " with `pip install xinference` or `pip install xinference_client`."
                 ) from e
-        client: RESTfulClient
+
         model_kwargs = model_kwargs or {}
 
-        super().__init__(**{"server_url": server_url, "model_uid": model_uid, "model_kwargs": model_kwargs})
-        self._headers = {}
+        super().__init__(
+            **{  # type: ignore[arg-type]
+                "server_url": server_url,
+                "model_uid": model_uid,
+                "model_kwargs": model_kwargs,
+            }
+        )
+
+        if self.server_url is None:
+            raise ValueError("Please provide server URL")
+
+        if self.model_uid is None:
+            raise ValueError("Please provide the model UID")
+
+        self._headers: Dict[str, str] = {}
+        self._cluster_authed = False
         self._check_cluster_authenticated()
-        if api_key and self._cluster_authed:
+        if api_key is not None and self._cluster_authed:
             self._headers["Authorization"] = f"Bearer {api_key}"
-        self.client = RESTfulClient(server_url)
+
+        self.client = RESTfulClient(server_url, api_key)
 
     @property
     def _llm_type(self) -> str:
         return "xinference-text-to-audio"
 
     @property
-    def _identifying_params(self) -> Dict[str, Any]:
-        return {"server_url": self.server_url, "model_uid": self.model_uid}
+    def _identifying_params(self) -> Mapping[str, Any]:
+        """Get the identifying parameters."""
+        return {
+            **{"server_url": self.server_url},
+            **{"model_uid": self.model_uid},
+            **{"model_kwargs": self.model_kwargs},
+        }
+
 
     def _check_cluster_authenticated(self) -> None:
         url = f"{self.server_url}/v1/cluster/auth"
-        resp = requests.get(url)
-        if resp.status_code not in (200, 404):
-            raise RuntimeError(f"Cluster auth failed: {resp.text}")
-        self._cluster_authed = resp.status_code == 200 and resp.json().get("auth", False)
+        response = requests.get(url)
+        if response.status_code == 404:
+            self._cluster_authed = False
+        else:
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Failed to get cluster information, "
+                    f"detail: {response.json()['detail']}"
+                )
+            response_data = response.json()
+            self._cluster_authed = bool(response_data["auth"])
 
     def _generate(
         self,
@@ -119,8 +147,8 @@ class XinferenceAudioToText(BaseChatModel):
 
     def __init__(
         self,
-        server_url: str,
-        model_uid: str,
+        server_url: Optional[str] = None,
+        model_uid: Optional[str] = None,
         api_key: Optional[str] = None,
         **model_kwargs: Any,
     ):
@@ -134,23 +162,43 @@ class XinferenceAudioToText(BaseChatModel):
                     "Could not import RESTfulClient from xinference. Please install it"
                     " with `pip install xinference` or `pip install xinference_client`."
                 ) from e
-        client: RESTfulClient
+
         model_kwargs = model_kwargs or {}
 
-        super().__init__(**{"server_url": server_url, "model_uid": model_uid, "model_kwargs": model_kwargs})
-        self._headers = {}
+        super().__init__(
+            **{  # type: ignore[arg-type]
+                "server_url": server_url,
+                "model_uid": model_uid,
+                "model_kwargs": model_kwargs,
+            }
+        )
+
+        if self.server_url is None:
+            raise ValueError("Please provide server URL")
+
+        if self.model_uid is None:
+            raise ValueError("Please provide the model UID")
+
+        self._headers: Dict[str, str] = {}
+        self._cluster_authed = False
         self._check_cluster_authenticated()
-        if api_key and self._cluster_authed:
+        if api_key is not None and self._cluster_authed:
             self._headers["Authorization"] = f"Bearer {api_key}"
-        self.client = RESTfulClient(server_url)
+
+        self.client = RESTfulClient(server_url, api_key)
 
     @property
     def _llm_type(self) -> str:
         return "xinference-audio-to-text"
 
     @property
-    def _identifying_params(self) -> Dict[str, Any]:
-        return {"server_url": self.server_url, "model_uid": self.model_uid}
+    def _identifying_params(self) -> Mapping[str, Any]:
+        """Get the identifying parameters."""
+        return {
+            **{"server_url": self.server_url},
+            **{"model_uid": self.model_uid},
+            **{"model_kwargs": self.model_kwargs},
+        }
 
     def _generate(
         self,
@@ -166,17 +214,30 @@ class XinferenceAudioToText(BaseChatModel):
             results.append(gen)
         return ChatResult(generations=results)
 
+    def _check_cluster_authenticated(self) -> None:
+        url = f"{self.server_url}/v1/cluster/auth"
+        response = requests.get(url)
+        if response.status_code == 404:
+            self._cluster_authed = False
+        else:
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Failed to get cluster information, "
+                    f"detail: {response.json()['detail']}"
+                )
+            response_data = response.json()
+            self._cluster_authed = bool(response_data["auth"])
+
     def _convert_audio_to_text(self, message: BaseMessage, **kwargs) -> AIMessage:
         message = message.content
         if isinstance(message, str):
             raise ValueError("Audio is required for convert text.")
         model = self.client.get_model(self.model_uid)
         audio_url = None
+
         for block in message:
-            if isinstance(block, str):
-                continue
-            elif block["type"] == "audio_url":
-                audio_url = block["audio_url"]["url"]
+            if isinstance(block, dict) and block.get("type") == "audio_url":
+                audio_url = block.get("audio_url", {}).get("url")
                 break
         if audio_url is None:
             raise ValueError("Audio is required for convert text.")

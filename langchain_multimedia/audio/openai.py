@@ -11,6 +11,7 @@ from langchain_core.messages import BaseMessage, AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from io import BytesIO
 
+
 class OpenAITextToAudio(BaseChatOpenAI):
     """Generate audio from text prompts using OpenAI TTS API."""
 
@@ -31,12 +32,12 @@ class OpenAITextToAudio(BaseChatOpenAI):
     ) -> ChatResult:
         results = []
         for message in messages:
-            ai_msg = self._convert_text_to_audio(message,**kwargs)
+            ai_msg = self._convert_text_to_audio(message, **kwargs)
             gen = ChatGeneration(message=ai_msg)
             results.append(gen)
         return ChatResult(generations=results)
 
-    def _convert_text_to_audio(self, message: BaseMessage,**kwargs) -> AIMessage:
+    def _convert_text_to_audio(self, message: BaseMessage, **kwargs) -> AIMessage:
         # Extract the first user message as text prompt
         prompt = message.text()
 
@@ -91,8 +92,8 @@ class OpenAIAudioToText(BaseChatOpenAI):
         # Extract the first assistant message containing audio URL
         audio_url = None
         for block in message.content:
-            if block.get("type") == "audio_url":
-                audio_url = block["audio_url"]["url"]
+            if isinstance(block, dict) and block.get("type") == "audio_url":
+                audio_url = block.get("audio_url", {}).get("url")
                 break
         if not audio_url:
             raise ValueError("Audio URL is required for transcription.")

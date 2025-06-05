@@ -1,7 +1,7 @@
 import tempfile
 import uuid
 from pathlib import Path
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Mapping
 from urllib.request import urlopen
 
 import magic
@@ -25,8 +25,8 @@ class XinferenceTextToImage(BaseChatModel):
 
     def __init__(
         self,
-        server_url: str,
-        model_uid: str,
+        server_url: Optional[str] = None,
+        model_uid: Optional[str] = None,
         api_key: Optional[str] = None,
         **model_kwargs: Any,
     ):
@@ -40,30 +40,58 @@ class XinferenceTextToImage(BaseChatModel):
                     "Could not import RESTfulClient from xinference. Please install it"
                     " with `pip install xinference` or `pip install xinference_client`."
                 ) from e
-        client: RESTfulClient
+
         model_kwargs = model_kwargs or {}
 
-        super().__init__(**{"server_url": server_url, "model_uid": model_uid, "model_kwargs": model_kwargs})
-        self._headers = {}
+        super().__init__(
+            **{  # type: ignore[arg-type]
+                "server_url": server_url,
+                "model_uid": model_uid,
+                "model_kwargs": model_kwargs,
+            }
+        )
+
+        if self.server_url is None:
+            raise ValueError("Please provide server URL")
+
+        if self.model_uid is None:
+            raise ValueError("Please provide the model UID")
+
+        self._headers: Dict[str, str] = {}
+        self._cluster_authed = False
         self._check_cluster_authenticated()
-        if api_key and self._cluster_authed:
+        if api_key is not None and self._cluster_authed:
             self._headers["Authorization"] = f"Bearer {api_key}"
-        self.client = RESTfulClient(server_url)
+
+        self.client = RESTfulClient(server_url, api_key)
 
     @property
     def _llm_type(self) -> str:
         return "xinference-text-to-image"
 
     @property
-    def _identifying_params(self) -> Dict[str, Any]:
-        return {"server_url": self.server_url, "model_uid": self.model_uid}
+    def _identifying_params(self) -> Mapping[str, Any]:
+        """Get the identifying parameters."""
+        return {
+            **{"server_url": self.server_url},
+            **{"model_uid": self.model_uid},
+            **{"model_kwargs": self.model_kwargs},
+        }
+
 
     def _check_cluster_authenticated(self) -> None:
         url = f"{self.server_url}/v1/cluster/auth"
-        resp = requests.get(url)
-        if resp.status_code not in (200, 404):
-            raise RuntimeError(f"Cluster auth failed: {resp.text}")
-        self._cluster_authed = resp.status_code == 200 and resp.json().get("auth", False)
+        response = requests.get(url)
+        if response.status_code == 404:
+            self._cluster_authed = False
+        else:
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Failed to get cluster information, "
+                    f"detail: {response.json()['detail']}"
+                )
+            response_data = response.json()
+            self._cluster_authed = bool(response_data["auth"])
 
     def _generate(
         self,
@@ -79,6 +107,7 @@ class XinferenceTextToImage(BaseChatModel):
             results.append(gen)
         return ChatResult(generations=results)
 
+
     def _convert_text_to_image(self, message: BaseMessage, **kwargs) -> AIMessage:
         message = message
         model = self.client.get_model(self.model_uid)
@@ -86,8 +115,8 @@ class XinferenceTextToImage(BaseChatModel):
         input_image_url = None
         if not isinstance(message, str):
             for block in message.content:
-                if not isinstance(block, str) and block["type"] == "image-url":
-                    input_image_url = block["image-url"]["url"]
+                if not isinstance(block, str) and block.get("type") == "image_url":
+                    input_image_url = block.get("image_url", {}).get("url")
                     break
         if not prompt:
             raise ValueError("Prompt is required for image generation.")
@@ -98,7 +127,7 @@ class XinferenceTextToImage(BaseChatModel):
             response = model.text_to_image(prompt=prompt, **kwargs)
 
         output_image_url = response["data"]["url"]
-        if output_image_url.startwith("/"):
+        if output_image_url.startswith("/"):
             output_image_url = "file://" + output_image_url
 
         image = urlopen(output_image_url).read()
@@ -135,8 +164,8 @@ class XinferenceImageToText(BaseChatModel):
 
     def __init__(
         self,
-        server_url: str,
-        model_uid: str,
+        server_url: Optional[str] = None,
+        model_uid: Optional[str] = None,
         api_key: Optional[str] = None,
         **model_kwargs: Any,
     ):
@@ -150,30 +179,58 @@ class XinferenceImageToText(BaseChatModel):
                     "Could not import RESTfulClient from xinference. Please install it"
                     " with `pip install xinference` or `pip install xinference_client`."
                 ) from e
-        client: RESTfulClient
+
         model_kwargs = model_kwargs or {}
 
-        super().__init__(**{"server_url": server_url, "model_uid": model_uid, "model_kwargs": model_kwargs})
-        self._headers = {}
+        super().__init__(
+            **{  # type: ignore[arg-type]
+                "server_url": server_url,
+                "model_uid": model_uid,
+                "model_kwargs": model_kwargs,
+            }
+        )
+
+        if self.server_url is None:
+            raise ValueError("Please provide server URL")
+
+        if self.model_uid is None:
+            raise ValueError("Please provide the model UID")
+
+        self._headers: Dict[str, str] = {}
+        self._cluster_authed = False
         self._check_cluster_authenticated()
-        if api_key and self._cluster_authed:
+        if api_key is not None and self._cluster_authed:
             self._headers["Authorization"] = f"Bearer {api_key}"
-        self.client = RESTfulClient(server_url)
+
+        self.client = RESTfulClient(server_url, api_key)
 
     @property
     def _llm_type(self) -> str:
         return "xinference-image-to-text"
 
-    @property
-    def _identifying_params(self) -> Dict[str, Any]:
-        return {"server_url": self.server_url, "model_uid": self.model_uid}
-
     def _check_cluster_authenticated(self) -> None:
         url = f"{self.server_url}/v1/cluster/auth"
-        resp = requests.get(url)
-        if resp.status_code not in (200, 404):
-            raise RuntimeError(f"Cluster auth failed: {resp.text}")
-        self._cluster_authed = resp.status_code == 200 and resp.json().get("auth", False)
+        response = requests.get(url)
+        if response.status_code == 404:
+            self._cluster_authed = False
+        else:
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Failed to get cluster information, "
+                    f"detail: {response.json()['detail']}"
+                )
+            response_data = response.json()
+            self._cluster_authed = bool(response_data["auth"])
+
+    @property
+    def _identifying_params(self) -> Mapping[str, Any]:
+        """Get the identifying parameters."""
+        return {
+            **{"server_url": self.server_url},
+            **{"model_uid": self.model_uid},
+            **{"model_kwargs": self.model_kwargs},
+        }
+
 
     def _generate(
         self,
@@ -195,13 +252,10 @@ class XinferenceImageToText(BaseChatModel):
         model = self.client.get_model(self.model_uid)
         if isinstance(message, str):
             raise ValueError("Image is required for generate text.")
-        else:
-            for block in message:
-                if isinstance(block, str):
-                    continue
-                if block["type"] == "image-url":
-                    image_url = block["image_url"]["url"]
-                    break
+        for block in message:
+            if isinstance(block, dict) and block.get("type") == "image_url":
+                image_url = block.get("image_url", {}).get("url")
+                break
         if not image_url:
             raise ValueError("Prompt is required for image generation.")
         image = urlopen(image_url).read()

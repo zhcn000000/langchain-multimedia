@@ -1,4 +1,4 @@
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Mapping
 from urllib.request import urlopen
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -21,8 +21,8 @@ class XinferenceTextToVideo(BaseChatModel):
 
     def __init__(
         self,
-        server_url: str,
-        model_uid: str,
+        server_url: Optional[str] = None,
+        model_uid: Optional[str] = None,
         api_key: Optional[str] = None,
         **model_kwargs: Any,
     ):
@@ -36,30 +36,59 @@ class XinferenceTextToVideo(BaseChatModel):
                     "Could not import RESTfulClient from xinference. Please install it"
                     " with `pip install xinference` or `pip install xinference_client`."
                 ) from e
-        client: RESTfulClient
+
         model_kwargs = model_kwargs or {}
 
-        super().__init__(**{"server_url": server_url, "model_uid": model_uid, "model_kwargs": model_kwargs})
-        self._headers = {}
+        super().__init__(
+            **{  # type: ignore[arg-type]
+                "server_url": server_url,
+                "model_uid": model_uid,
+                "model_kwargs": model_kwargs,
+            }
+        )
+
+        if self.server_url is None:
+            raise ValueError("Please provide server URL")
+
+        if self.model_uid is None:
+            raise ValueError("Please provide the model UID")
+
+        self._headers: Dict[str, str] = {}
+        self._cluster_authed = False
         self._check_cluster_authenticated()
-        if api_key and self._cluster_authed:
+        if api_key is not None and self._cluster_authed:
             self._headers["Authorization"] = f"Bearer {api_key}"
-        self.client = RESTfulClient(server_url)
+
+        self.client = RESTfulClient(server_url, api_key)
+
+    def _check_cluster_authenticated(self) -> None:
+        url = f"{self.server_url}/v1/cluster/auth"
+        response = requests.get(url)
+        if response.status_code == 404:
+            self._cluster_authed = False
+        else:
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Failed to get cluster information, "
+                    f"detail: {response.json()['detail']}"
+                )
+            response_data = response.json()
+            self._cluster_authed = bool(response_data["auth"])
 
     @property
     def _llm_type(self) -> str:
         return "xinference-text-to-video"
 
     @property
-    def _identifying_params(self) -> Dict[str, Any]:
-        return {"server_url": self.server_url, "model_uid": self.model_uid}
+    def _identifying_params(self) -> Mapping[str, Any]:
+        """Get the identifying parameters."""
+        return {
+            **{"server_url": self.server_url},
+            **{"model_uid": self.model_uid},
+            **{"model_kwargs": self.model_kwargs},
+        }
 
-    def _check_cluster_authenticated(self) -> None:
-        url = f"{self.server_url}/v1/cluster/auth"
-        resp = requests.get(url)
-        if resp.status_code not in (200, 404):
-            raise RuntimeError(f"Cluster auth failed: {resp.text}")
-        self._cluster_authed = resp.status_code == 200 and resp.json().get("auth", False)
+
 
     def _generate(
         self,
@@ -79,12 +108,11 @@ class XinferenceTextToVideo(BaseChatModel):
         input_image_url = None
         prompt = message.text()
         model = self.client.get_model(self.model_uid)
-        if isinstance(message, str):
-            if not isinstance(message, str):
-                for block in message.content:
-                    if not isinstance(block, str) and block["type"] == "image-url":
-                        input_image_url = block["image-url"]["url"]
-                        break
+        if not isinstance(message, str):
+            for block in message.content:
+                if not isinstance(block, str) and block.get("type") == "image_url":
+                    input_image_url = block.get("image_url", {}).get("url")
+                    break
         if not prompt:
             raise ValueError("Prompt is required for image generation.")
         if input_image_url is not None:
