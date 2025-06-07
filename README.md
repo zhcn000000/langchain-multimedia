@@ -54,7 +54,7 @@ ai_message = model.invoke(input=[message])
 
 '''
 ai_message.content like
-[{"type": "audio_url", "audio_url": {"url": "file://path/to/generated_audio.mp3"}}]
+[{"type": "audio_file", "path": "/path/to/generated_audio.mp3"}]
 '''
 ```
 
@@ -73,9 +73,8 @@ message = HumanMessage(content=[{"type": "text", "text": "Generate a landscape p
 ai_message = model.invoke(input=[message])
 '''
 ai_message.content like
-[{"type": "image_url", "image_url": {"url": "file://path/to/generated_image.png"}}]
+[{"type": "image_file", "path": "/path/to/generated_image.png"}]
 '''
-
 ```
 
 ## Configuration
