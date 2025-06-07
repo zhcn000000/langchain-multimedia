@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from langchain_core.messages import HumanMessage, AIMessage
+from openai.types.beta.threads import image_file
+
 from langchain_multimedia.audio import OpenAITextToAudio,OpenAIAudioToText,XinferenceAudioToText
 from urllib.request import urlopen
 import json
@@ -27,8 +31,8 @@ def test_generate_audio():
     )
     ai_message = model.invoke(input=[message], voice="FunAudioLLM/CosyVoice2-0.5B:alex",response_format="wav")
     assert isinstance(ai_message, AIMessage)
-    out_audio_url = ai_message.content[0]["audio_url"]["url"]
-    audio_data = urlopen(out_audio_url).read()
+    audio_file = Path(ai_message.content[0]["path"])
+    audio_data = audio_file.read_bytes()
     with open("test.mp3", "wb") as f:
         f.write(audio_data)
     model = OpenAIAudioToText(
@@ -36,11 +40,7 @@ def test_generate_audio():
         api_key=cfg["api_key"],
         model=cfg["sound-model"],
     )
-    message = HumanMessage(
-        content=[
-            {"type": "audio_url", "audio_url": {"url": out_audio_url}},
-        ]
-    )
+    message = ai_message
     ai_message = model.invoke(input=[message])
     content = ai_message.text()
     print(content)

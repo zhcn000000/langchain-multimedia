@@ -1,6 +1,6 @@
-from .xinference import XinferenceImageToText, XinferenceTextToImage
 from .openai import OpenAITextToImage
 from .sdapi import SDAPITextToImage
+from .xinference import XinferenceImageToText, XinferenceTextToImage
 
 __all__ = [
     "XinferenceImageToText",

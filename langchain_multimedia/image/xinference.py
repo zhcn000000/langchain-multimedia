@@ -1,15 +1,12 @@
-import tempfile
-import uuid
-from pathlib import Path
-from typing import List, Optional, Any, Dict, Mapping
-from urllib.request import urlopen
+from typing import Any, Dict, List, Mapping, Optional
 
-import magic
+import requests
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage, AIMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
-import requests
+
+from langchain_multimedia.utils.helpers import _build_image, _find_image
 
 
 class XinferenceTextToImage(BaseChatModel):
@@ -78,7 +75,6 @@ class XinferenceTextToImage(BaseChatModel):
             **{"model_kwargs": self.model_kwargs},
         }
 
-
     def _check_cluster_authenticated(self) -> None:
         url = f"{self.server_url}/v1/cluster/auth"
         response = requests.get(url)
@@ -86,10 +82,7 @@ class XinferenceTextToImage(BaseChatModel):
             self._cluster_authed = False
         else:
             if response.status_code != 200:
-                raise RuntimeError(
-                    f"Failed to get cluster information, "
-                    f"detail: {response.json()['detail']}"
-                )
+                raise RuntimeError(f"Failed to get cluster information, detail: {response.json()['detail']}")
             response_data = response.json()
             self._cluster_authed = bool(response_data["auth"])
 
@@ -107,48 +100,20 @@ class XinferenceTextToImage(BaseChatModel):
             results.append(gen)
         return ChatResult(generations=results)
 
-
     def _convert_text_to_image(self, message: BaseMessage, **kwargs) -> AIMessage:
         message = message
         model = self.client.get_model(self.model_uid)
         prompt = message.text()
-        input_image_url = None
-        if not isinstance(message, str):
-            for block in message.content:
-                if not isinstance(block, str) and block.get("type") == "image_url":
-                    input_image_url = block.get("image_url", {}).get("url")
-                    break
+        input_image = _find_image(message)
         if not prompt:
             raise ValueError("Prompt is required for image generation.")
-        if input_image_url is not None:
-            input_image = urlopen(input_image_url).read()
+        if input_image is not None:
             response = model.image_to_image(prompt=prompt, image=input_image, **kwargs)
         else:
             response = model.text_to_image(prompt=prompt, **kwargs)
 
-        output_image_url = response["data"]["url"]
-        if output_image_url.startswith("/"):
-            output_image_url = "file://" + output_image_url
-
-        image = urlopen(output_image_url).read()
-        cache_dir = Path(tempfile.gettempdir()) / "langchain_multimedia"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        mime = magic.from_buffer(image, mime=True)
-        ext = mime.split("/")[-1]
-        filename = cache_dir / f"{uuid.uuid4()}.{ext}"
-        with open(filename, "wb") as f:
-            f.write(image)
-        image_url = f"file://{filename}"
-        return AIMessage(
-            content=[
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": image_url,
-                    },
-                }
-            ]
-        )
+        image = open(response["data"]["url"], "rb").read()
+        return AIMessage(content=[_build_image(image)])
 
 
 class XinferenceImageToText(BaseChatModel):
@@ -215,10 +180,7 @@ class XinferenceImageToText(BaseChatModel):
             self._cluster_authed = False
         else:
             if response.status_code != 200:
-                raise RuntimeError(
-                    f"Failed to get cluster information, "
-                    f"detail: {response.json()['detail']}"
-                )
+                raise RuntimeError(f"Failed to get cluster information, detail: {response.json()['detail']}")
             response_data = response.json()
             self._cluster_authed = bool(response_data["auth"])
 
@@ -230,7 +192,6 @@ class XinferenceImageToText(BaseChatModel):
             **{"model_uid": self.model_uid},
             **{"model_kwargs": self.model_kwargs},
         }
-
 
     def _generate(
         self,
@@ -247,19 +208,11 @@ class XinferenceImageToText(BaseChatModel):
         return ChatResult(generations=results)
 
     def _convert_image_to_text(self, message: BaseMessage, **kwargs) -> AIMessage:
-        image_url = None
-        message = message.content
         model = self.client.get_model(self.model_uid)
-        if isinstance(message, str):
-            raise ValueError("Image is required for generate text.")
-        for block in message:
-            if isinstance(block, dict) and block.get("type") == "image_url":
-                image_url = block.get("image_url", {}).get("url")
-                break
-        if not image_url:
+        input_image = _find_image(message)
+        if not input_image:
             raise ValueError("Prompt is required for image generation.")
-        image = urlopen(image_url).read()
-        text = model.ocr(image=image, **kwargs)
+        text = model.ocr(image=input_image, **kwargs)
         return AIMessage(
             content=[
                 {

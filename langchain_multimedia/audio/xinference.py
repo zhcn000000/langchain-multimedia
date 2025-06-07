@@ -1,16 +1,12 @@
-import tempfile
-import magic
-from pathlib import Path
-from typing import List, Optional, Any, Dict, Mapping
-from urllib.request import urlopen
+from typing import Any, Dict, List, Mapping, Optional
 
 import requests
-import uuid
-
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage, AIMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
+
+from langchain_multimedia.utils.helpers import _build_audio, _find_audio
 
 
 class XinferenceTextToAudio(BaseChatModel):
@@ -79,7 +75,6 @@ class XinferenceTextToAudio(BaseChatModel):
             **{"model_kwargs": self.model_kwargs},
         }
 
-
     def _check_cluster_authenticated(self) -> None:
         url = f"{self.server_url}/v1/cluster/auth"
         response = requests.get(url)
@@ -87,10 +82,7 @@ class XinferenceTextToAudio(BaseChatModel):
             self._cluster_authed = False
         else:
             if response.status_code != 200:
-                raise RuntimeError(
-                    f"Failed to get cluster information, "
-                    f"detail: {response.json()['detail']}"
-                )
+                raise RuntimeError(f"Failed to get cluster information, detail: {response.json()['detail']}")
             response_data = response.json()
             self._cluster_authed = bool(response_data["auth"])
 
@@ -112,26 +104,7 @@ class XinferenceTextToAudio(BaseChatModel):
         prompt = message.text()
         model = self.client.get_model(self.model_uid)
         audio = model.speech(input=prompt, **self.model_kwargs)
-        cache_dir = Path(tempfile.gettempdir()) / "langchain_multimedia"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        name = str(uuid.uuid4())
-        mime = magic.from_buffer(audio, mime=True)
-        ext = mime.split("/")[-1]
-        if ext == "x-wav":
-            ext = "wav"
-        elif ext == "mpeg":
-            ext = "mp3"
-        with open(str(cache_dir / f"{name}.{ext}"), "wb") as f:
-            f.write(audio)
-        audio_url = f"file://{str(cache_dir / f'{name}.mp3')}"
-        return AIMessage(
-            content=[
-                {
-                    "type": "audio_url",
-                    "audio_url": {"url": audio_url},
-                }
-            ]
-        )
+        return AIMessage(content=[_build_audio(audio)])
 
 
 class XinferenceAudioToText(BaseChatModel):
@@ -221,33 +194,21 @@ class XinferenceAudioToText(BaseChatModel):
             self._cluster_authed = False
         else:
             if response.status_code != 200:
-                raise RuntimeError(
-                    f"Failed to get cluster information, "
-                    f"detail: {response.json()['detail']}"
-                )
+                raise RuntimeError(f"Failed to get cluster information, detail: {response.json()['detail']}")
             response_data = response.json()
             self._cluster_authed = bool(response_data["auth"])
 
     def _convert_audio_to_text(self, message: BaseMessage, **kwargs) -> AIMessage:
-        message = message.content
+        input_audio = _find_audio(message)
         if isinstance(message, str):
             raise ValueError("Audio is required for convert text.")
         model = self.client.get_model(self.model_uid)
-        audio_url = None
-
-        for block in message:
-            if isinstance(block, dict) and block.get("type") == "audio_url":
-                audio_url = block.get("audio_url", {}).get("url")
-                break
-        if audio_url is None:
-            raise ValueError("Audio is required for convert text.")
-        audio = urlopen(audio_url).read()
         translation = False
         if "translation" in kwargs:
             kwargs.pop("translation")
             translation = bool(kwargs["translation"])
         if translation:
-            text: str = model.translations(audio=audio, **kwargs)["text"]
+            text: str = model.translations(audio=input_audio, **kwargs)["text"]
         else:
-            text: str = model.transcriptions(audio=audio, **kwargs)["text"]
+            text: str = model.transcriptions(audio=input_audio, **kwargs)["text"]
         return AIMessage(content=[{"type": "text", "text": text}])

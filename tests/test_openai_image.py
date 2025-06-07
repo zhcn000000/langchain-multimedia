@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_multimedia.image import OpenAITextToImage
 from urllib.request import urlopen
@@ -25,8 +27,8 @@ def test_generate_audio_creates_file_and_returns_ai_message():
         ]
     )
     ai_message = model.invoke(input=[message])
-    image_file = ai_message.content[0]["image_url"]["url"]
-    image_data = urlopen(image_file).read()
+    image_file = Path(ai_message.content[0]["path"])
+    image_data = image_file.read_bytes()
     with open("test.png", "wb") as f:
         f.write(image_data)
     assert isinstance(ai_message, AIMessage)

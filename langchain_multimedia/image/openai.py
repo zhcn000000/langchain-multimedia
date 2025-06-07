@@ -1,14 +1,12 @@
-import tempfile
-import uuid
-from pathlib import Path
-from typing import Any, List, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.request import urlopen
 
-import magic
 from langchain_core.callbacks import CallbackManagerForLLMRun
-from langchain_openai.chat_models.base import BaseChatOpenAI
-from langchain_core.messages import BaseMessage, AIMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
+from langchain_openai.chat_models.base import BaseChatOpenAI
+
+from langchain_multimedia.utils.helpers import _build_image, _find_image
 
 
 class OpenAITextToImage(BaseChatOpenAI):
@@ -42,13 +40,8 @@ class OpenAITextToImage(BaseChatOpenAI):
     def _convert_text_to_image(self, message: BaseMessage, **kwargs: Any) -> AIMessage:
         # Extract prompt from the first message
         prompt = message.text()
-        input_image_url = None
-        if not isinstance(message, str):
-            for block in message.content:
-                if not isinstance(block, str) and block["type"] == "image_url":
-                    input_image_url = block["image_url"]["url"]
-                    break
-        if input_image_url is None:
+        input_image = _find_image(message)
+        if input_image is None:
             # Call OpenAI Image API to generate an image
             response = self.root_client.images.generate(
                 model=self.model_name,
@@ -56,16 +49,12 @@ class OpenAITextToImage(BaseChatOpenAI):
                 **kwargs,
             )
         elif prompt is None or prompt.strip() == "":
-            # If no prompt is provided, use the input image URL for image generation
-            input_image = urlopen(input_image_url).read()
             response = self.root_client.images.create_variation(
                 model=self.model_name,
                 image=input_image,
                 **kwargs,
             )
         else:
-            # If an input image URL is provided, use it for image generation
-            input_image = urlopen(input_image_url).read()
             response = self.root_client.images.edit(
                 model=self.model_name,
                 prompt=prompt,
@@ -73,25 +62,10 @@ class OpenAITextToImage(BaseChatOpenAI):
                 **kwargs,
             )
         output_image_url = response.data[0].url
-        image = urlopen(output_image_url).read()
-        cache_dir = Path(tempfile.gettempdir()) / "langchain_multimedia"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        mime = magic.from_buffer(image, mime=True)
-        ext = mime.split("/")[-1]
-        filename = cache_dir / f"{uuid.uuid4()}.{ext}"
-        with open(filename, "wb") as f:
-            f.write(image)
-
-        # Retrieve the URL of the first generated image
-        image_url = f"file://{filename}"
+        output_image = urlopen(output_image_url).read()
 
         # Wrap the result into an AIMessage and ChatResult
         ai_msg = AIMessage(
-            content=[
-                {
-                    "type": "image_url",
-                    "image_url": {"url": image_url},
-                }
-            ]
+            content=[_build_image(output_image)],
         )
         return ai_msg
