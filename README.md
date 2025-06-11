@@ -38,12 +38,12 @@ This project leverages [LangChain](https://github.com/langchain-ai/langchain) to
    python examples/audio_to_text.py
    ```
 
-### OpenAITextToAudio Example
+### OpenAIAudioGenerator Example
 ```python
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_multimedia.audio import OpenAITextToAudio
+from langchain_multimedia.audio import OpenAIAudioGenerator
 
-model = OpenAITextToAudio(
+model = OpenAIAudioGenerator(
     base_url="https://api.example.com",
     api_key="YOUR_API_KEY",
     model="voice-1",
@@ -58,12 +58,12 @@ ai_message.content like
 '''
 ```
 
-### OpenAITextToImage Example
+### OpenAIImageGenerator Example
 ```python
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_multimedia.image import OpenAITextToImage
+from langchain_multimedia.image import OpenAIImageGenerator
 
-model = OpenAITextToImage(
+model = OpenAIImageGenerator(
     base_url="https://api.example.com",
     api_key="YOUR_API_KEY",
     model="vision-1",
