@@ -1,5 +1,5 @@
-from .xinference import XinferenceTextToVideo
+from .xinference import XinferenceVideoGenerator
 
 __all__ = [
-    "XinferenceTextToVideo",
+    "XinferenceVideoGenerator",
 ]

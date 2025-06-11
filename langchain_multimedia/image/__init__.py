@@ -1,10 +1,10 @@
-from .openai import OpenAITextToImage
-from .sdapi import SDAPITextToImage
-from .xinference import XinferenceImageToText, XinferenceTextToImage
+from .xinference import XinferenceOCR,XinferenceImageGenerator
+from .openai import OpenAIImageGenerator
+from .sdapi import StableDiffusionImageGenerator
 
 __all__ = [
-    "XinferenceImageToText",
-    "XinferenceTextToImage",
-    "OpenAITextToImage",
-    "SDAPITextToImage",
+    "XinferenceOCR",
+    "XinferenceImageGenerator",
+    "OpenAIImageGenerator",
+    "StableDiffusionImageGenerator",
 ]

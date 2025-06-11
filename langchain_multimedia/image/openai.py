@@ -4,15 +4,17 @@ from urllib.request import urlopen
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
-from langchain_openai.chat_models.base import BaseChatOpenAI
-
+from langchain_multimedia.core import BaseGenerationOpenAI, GenerationType
 from langchain_multimedia.utils.helpers import _build_image, _find_image
 
 
-class OpenAITextToImage(BaseChatOpenAI):
+class OpenAIImageGenerator(BaseGenerationOpenAI):
     """
     Uses OpenAI Image API to generate images from text prompts.
     """
+    @property
+    def _generator_type(self):
+        return GenerationType.ImageGenerator
 
     @property
     def _llm_type(self) -> str:

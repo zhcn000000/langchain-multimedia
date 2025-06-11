@@ -1,9 +1,9 @@
-from .openai import OpenAIAudioToText, OpenAITextToAudio
-from .xinference import XinferenceAudioToText, XinferenceTextToAudio
+from .openai import OpenAITranscriptor,OpenAIAudioGenerator
+from .xinference import XinferenceTranscriptor,XinferenceAudioGenerator
 
 __all__ = [
-    "OpenAIAudioToText",
-    "OpenAITextToAudio",
-    "XinferenceAudioToText",
-    "XinferenceTextToAudio",
+    "OpenAITranscriptor",
+    "OpenAIAudioGenerator",
+    "XinferenceTranscriptor",
+    "XinferenceAudioGenerator",
 ]

@@ -6,9 +6,9 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_openai.chat_models.base import BaseChatOpenAI
 
 from langchain_multimedia.utils.helpers import _build_audio, _find_audio
+from langchain_multimedia.core import BaseGenerationOpenAI,GenerationType
 
-
-class OpenAITextToAudio(BaseChatOpenAI):
+class OpenAIAudioGenerator(BaseGenerationOpenAI):
     """Generate audio from text prompts using OpenAI TTS API."""
 
     @property
@@ -18,6 +18,10 @@ class OpenAITextToAudio(BaseChatOpenAI):
     @property
     def _identifying_params(self) -> Dict[str, Any]:
         return {"model_name": self.model_name}
+
+    @property
+    def _generator_type(self):
+        return GenerationType.AudioGenerator
 
     def _generate(
         self,
@@ -43,7 +47,7 @@ class OpenAITextToAudio(BaseChatOpenAI):
         return AIMessage(content=[_build_audio(audio)])
 
 
-class OpenAIAudioToText(BaseChatOpenAI):
+class OpenAITranscriptor(BaseChatOpenAI):
     """Transcribe audio files to text using OpenAI Whisper API."""
 
     @property

@@ -1,8 +1,7 @@
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_multimedia.image import OpenAITextToImage
-from urllib.request import urlopen
+from langchain_multimedia.image import OpenAIImageGenerator
 import json
 import os
 
@@ -10,11 +9,9 @@ config_path = os.path.join(os.path.dirname(__file__), "api.json")
 with open(config_path, encoding="utf-8") as f:
     cfg = json.load(f)
 
-XINFERENCE_HOST = "localhost"
-XINFERENCE_PORT = 44000
 
 def test_generate_audio_creates_file_and_returns_ai_message():
-    model = OpenAITextToImage(
+    model = OpenAIImageGenerator(
         base_url=cfg["base_url"],
         api_key=cfg["api_key"],
         model=cfg["image-model"],

@@ -7,9 +7,9 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from langchain_multimedia.utils.helpers import _build_audio, _find_audio
+from langchain_multimedia.core import BaseGenerationModel, GenerationType
 
-
-class XinferenceTextToAudio(BaseChatModel):
+class XinferenceAudioGenerator(BaseGenerationModel):
     """XinferenceAudio is a chat model that uses xinference to generate audio from text prompts."""
 
     client: Optional[Any] = None
@@ -62,6 +62,10 @@ class XinferenceTextToAudio(BaseChatModel):
 
         self.client = RESTfulClient(server_url, api_key)
 
+    def _generator_type(self) -> GenerationType:
+        """Return the type of generator."""
+        return GenerationType.AudioGenerator
+
     @property
     def _llm_type(self) -> str:
         return "xinference-text-to-audio"
@@ -107,8 +111,8 @@ class XinferenceTextToAudio(BaseChatModel):
         return AIMessage(content=[_build_audio(audio)])
 
 
-class XinferenceAudioToText(BaseChatModel):
-    """XinferenceAudioToText is a chat model that uses xinference to transcribe audio to text."""
+class XinferenceTranscriptor(BaseChatModel):
+    """XinferenceTranscriptor is a chat model that uses xinference to transcribe audio to text."""
 
     client: Optional[Any] = None
     server_url: Optional[str]

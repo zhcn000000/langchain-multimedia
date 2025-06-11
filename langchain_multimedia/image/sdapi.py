@@ -3,14 +3,13 @@ from typing import Any, Dict, List, Optional
 
 import requests
 from langchain_core.callbacks import CallbackManagerForLLMRun
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from langchain_multimedia.utils.helpers import _build_image, _find_image
+from langchain_multimedia.core import BaseGenerationModel, GenerationType
 
-
-class SDAPITextToImage(BaseChatModel):
+class StableDiffusionImageGenerator(BaseGenerationModel):
     """Generate images from text prompts using Stable Diffusion REST API."""
 
     server_url: str
@@ -34,8 +33,12 @@ class SDAPITextToImage(BaseChatModel):
         self.model_kwargs = model_kwargs or {}
 
     @property
+    def _generator_type(self):
+        return GenerationType.ImageGenerator
+
+    @property
     def _llm_type(self) -> str:
-        return "sdapi-text-to-image"
+        return "StableDiffusion"
 
     @property
     def _identifying_params(self) -> Dict[str, Any]:

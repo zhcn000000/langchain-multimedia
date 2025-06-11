@@ -2,14 +2,13 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import requests
 from langchain_core.callbacks import CallbackManagerForLLMRun
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from langchain_multimedia.utils.helpers import _build_video, _find_image
+from langchain_multimedia.core import BaseGenerationModel, GenerationType
 
-
-class XinferenceTextToVideo(BaseChatModel):
+class XinferenceVideoGenerator(BaseGenerationModel):
     """XinferenceImage is a chat model that uses xinference to generate images from text prompts or image inputs."""
 
     client: Optional[Any] = None
@@ -72,6 +71,11 @@ class XinferenceTextToVideo(BaseChatModel):
                 raise RuntimeError(f"Failed to get cluster information, detail: {response.json()['detail']}")
             response_data = response.json()
             self._cluster_authed = bool(response_data["auth"])
+
+    @property
+    def _generator_type(self) -> GenerationType:
+        """Return the type of generator."""
+        return GenerationType.VideoGenerator
 
     @property
     def _llm_type(self) -> str:

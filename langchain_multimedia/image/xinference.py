@@ -7,9 +7,9 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from langchain_multimedia.utils.helpers import _build_image, _find_image
+from langchain_multimedia.core import BaseGenerationModel, GenerationType
 
-
-class XinferenceTextToImage(BaseChatModel):
+class XinferenceImageGenerator(BaseGenerationModel):
     """XinferenceImage is a chat model that uses xinference to generate images from text prompts or image inputs."""
 
     client: Optional[Any] = None
@@ -61,6 +61,9 @@ class XinferenceTextToImage(BaseChatModel):
             self._headers["Authorization"] = f"Bearer {api_key}"
 
         self.client = RESTfulClient(server_url, api_key)
+
+    def _generator_type(self):
+        return GenerationType.ImageGenerator
 
     @property
     def _llm_type(self) -> str:
@@ -116,7 +119,7 @@ class XinferenceTextToImage(BaseChatModel):
         return AIMessage(content=[_build_image(image)])
 
 
-class XinferenceImageToText(BaseChatModel):
+class XinferenceOCR(BaseChatModel):
     """XinferenceImage is a chat model that uses xinference to generate images from text prompts or image inputs."""
 
     client: Optional[Any] = None
