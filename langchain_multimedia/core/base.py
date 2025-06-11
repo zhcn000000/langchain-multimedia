@@ -17,7 +17,6 @@ class GenerationType(Enum):
 
 class GenerationTool(BaseTool):
     """Base class for multimedia generation tools."""
-    generator = None
 
     def __init__(self,generator,generation_type: GenerationType, **kwargs):
         """Initialize the generation tool with a specific type."""
@@ -56,13 +55,6 @@ class GenerationTool(BaseTool):
 class BaseGenerationModel(BaseChatModel):
     """Base class for generation models that extends BaseChatModel."""
 
-
-    """Delete some attributes that are not applicable to multimedia models."""
-    stream=None
-    astream=None
-    bind_tools=None
-    with_struct_output=None
-
     @abstractmethod
     def _generator_type(self) -> GenerationType:
         """Return the type of the generator."""
@@ -80,12 +72,6 @@ class BaseGenerationModel(BaseChatModel):
 class BaseGenerationOpenAI(BaseChatOpenAI):
     """Base class for generation models that extends BaseChatOpenAI."""
 
-
-    """Delete some attributes that are not applicable to multimedia models."""
-    stream=None
-    astream=None
-    bind_tools=None
-    with_struct_output=None
 
     @abstractmethod
     def _generator_type(self) -> GenerationType:
