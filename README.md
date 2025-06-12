@@ -41,27 +41,26 @@ This project leverages [LangChain](https://github.com/langchain-ai/langchain) to
 ### OpenAIAudioGenerator Example
 ```python
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_multimedia.audio import OpenAIAudioGenerator
+from langchain_multimedia import OpenAIAudioGenerator
 
 model = OpenAIAudioGenerator(
     base_url="https://api.example.com",
     api_key="YOUR_API_KEY",
     model="voice-1",
 )
-
-message = HumanMessage(content=[{"type": "text", "text": "Hello, world"}])
-ai_message = model.invoke(input=[message])
+model.voice = "en-US-Wavenet-D"  # Set the voice model
+prompt = "Hello, world"
+response = model.invoke(input=prompt)
 
 '''
-ai_message.content like
-[{"type": "audio_file", "path": "/path/to/generated_audio.mp3"}]
+response = "/path/to/generated_audio.mp3"
 '''
 ```
 
 ### OpenAIImageGenerator Example
 ```python
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_multimedia.image import OpenAIImageGenerator
+from langchain_multimedia import OpenAIImageGenerator
 
 model = OpenAIImageGenerator(
     base_url="https://api.example.com",
@@ -69,11 +68,29 @@ model = OpenAIImageGenerator(
     model="vision-1",
 )
 
-message = HumanMessage(content=[{"type": "text", "text": "Generate a landscape photo with mountains and a river"}])
-ai_message = model.invoke(input=[message])
+prompt = "Generate a landscape photo with mountains and a river"
+response = model.invoke(input=prompt)
 '''
-ai_message.content like
-[{"type": "image_file", "path": "/path/to/generated_image.png"}]
+response = "/path/to/generated_image.png"
+'''
+```
+
+## OpenAITranscriber Example
+```python
+from langchain_multimedia import OpenAITranscriber
+from pathlib import Path
+audio_file = "/path/to/audio.mp3"
+audio_data = Path(audio_file).read_bytes()
+
+model = OpenAITranscriber(
+    base_url="https://api.example.com",
+    api_key="YOUR_API_KEY",
+    model="whisper-1",
+)
+
+response = model.invoke(input=audio_data)
+'''
+response = "Transcribed text from the audio file"
 '''
 ```
 

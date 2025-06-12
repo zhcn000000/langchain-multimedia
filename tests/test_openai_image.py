@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_multimedia.image import OpenAIImageGenerator
+from langchain_multimedia import OpenAIImageGenerator
 import json
 import os
 
@@ -17,15 +17,10 @@ def test_generate_audio_creates_file_and_returns_ai_message():
         model=cfg["image-model"],
     )
     text = "A beautiful sunset over the mountains"
-
-    message = HumanMessage(
-        content=[
-            {"type": "text", "text": text},
-        ]
-    )
-    ai_message = model.invoke(input=[message])
-    image_file = Path(ai_message.content[0]["path"])
+    # 构造消息
+    response = model.invoke(input=text)
+    image_file = Path(response)
     image_data = image_file.read_bytes()
     with open("test.png", "wb") as f:
         f.write(image_data)
-    assert isinstance(ai_message, AIMessage)
+    assert isinstance(response, str)
