@@ -1,7 +1,7 @@
 import tempfile
 from mimetypes import guess_extension
 from pathlib import Path
-from typing import Any, Optional, Dict, Union, Mapping
+from typing import Any, Optional, Union, Mapping
 from uuid import uuid4
 
 import requests
@@ -10,6 +10,7 @@ from langchain_core.tools import BaseTool
 from langchain_core.utils import from_env, secret_from_env
 from magic import from_buffer
 from pydantic import model_validator, Field, SecretStr
+from anyio import Path as AsyncPath
 
 cache_dir = Path(tempfile.gettempdir()) / "langchain_multimedia"
 cache_dir.mkdir(parents=True, exist_ok=True)
@@ -87,12 +88,27 @@ class OpenAIAudioGenerator(OpenAITool):
         description="The voice to use for audio generation. If not provided, a default voice will be used.",
     )
 
+    args_schema = {
+        "prompt": {
+            "type": "string",
+            "description": "The text prompt to generate audio from"
+        }
+    }
+
     @staticmethod
     def _build_audio(output_audio):
         mime = from_buffer(output_audio, mime=True)
         ext = guess_extension(mime)
         filename = cache_dir / f"{uuid4()}{ext}"
         filename.write_bytes(output_audio)
+        return filename
+
+    @staticmethod
+    async def _abuild_audio(output_audio):
+        mime = from_buffer(output_audio, mime=True)
+        ext = guess_extension(mime)
+        filename = AsyncPath(cache_dir) / f"{uuid4()}{ext}"
+        await filename.write_bytes(output_audio)
         return filename
 
     def _run(self, prompt: str) -> str:
@@ -104,6 +120,15 @@ class OpenAIAudioGenerator(OpenAITool):
         ).content
         return str(self._build_audio(audio))
 
+    async def _arun(self, prompt: str) -> str:
+        audio = await self.async_client.audio.speech.create(
+            model=self.model_name,
+            input=prompt,
+            voice=self.voice,
+            **self.model_kwargs,
+        )
+        return str(await self._abuild_audio(audio.content))
+
 
 class OpenAIImageGenerator(OpenAITool):
     """OpenAIImageGenerator is a tool that uses OpenAI to generate images from text prompts."""
@@ -111,12 +136,27 @@ class OpenAIImageGenerator(OpenAITool):
     name: str = "OpenAIImageGenerator"
     description: str = "A tool that generates images from text prompts using OpenAI's image generation capabilities."
 
+    args_schema = {
+        "prompt": {
+            "type": "string",
+            "description": "The text prompt to generate image from"
+        }
+    }
+
     @staticmethod
     def _build_image(output_image):
         mime = from_buffer(output_image, mime=True)
         ext = guess_extension(mime)
         filename = cache_dir / f"{uuid4()}{ext}"
         filename.write_bytes(output_image)
+        return filename
+
+    @staticmethod
+    async def _abuild_image(output_image):
+        mime = from_buffer(output_image, mime=True)
+        ext = guess_extension(mime)
+        filename = AsyncPath(cache_dir) / f"{uuid4()}{ext}"
+        await filename.write_bytes(output_image)
         return filename
 
     def _run(self, prompt: str, image: Optional[str]=None) -> str:
@@ -129,7 +169,7 @@ class OpenAIImageGenerator(OpenAITool):
             )
         else:
             image = Path(image).read_bytes()
-            response = self.root_client.images.edit(
+            response = self.client.images.edit(
                 model=self.model_name,
                 prompt=prompt,
                 image=image,
@@ -139,6 +179,26 @@ class OpenAIImageGenerator(OpenAITool):
         response = requests.get(response).content
         return str(self._build_image(response))
 
+    async def _arun(self, prompt: str, image: Optional[str]=None) -> str:
+        """Run query through OpenAI async and parse result."""
+        if image is None:
+            response = await self.async_client.images.generate(
+                model=self.model_name,
+                prompt=prompt,
+                **self.model_kwargs,
+            )
+        else:
+            image_data = await AsyncPath(image).read_bytes()
+            response = await self.async_client.images.edit(
+                model=self.model_name,
+                prompt=prompt,
+                image=image_data,
+                **self.model_kwargs,
+            )
+        response = response.data[0].url
+        response = requests.get(response).content
+        return str(await self._abuild_image(response))
+
 
 class OpenAITranscriber(OpenAITool):
     """OpenAITranscriber is a tool that uses OpenAI to transcribe audio."""
@@ -146,6 +206,13 @@ class OpenAITranscriber(OpenAITool):
     translation: bool = False
     name: str = "OpenAITranscriber"
     description: str = "A tool that transcribes audio using OpenAI's transcription capabilities."
+
+    args_schema = {
+        "audio": {
+            "type": "string",
+            "description": "Path to the audio file to transcribe"
+        }
+    }
 
     def _run(self, audio: str) -> str:
         """Run query through OpenAI and parse result."""
@@ -158,6 +225,23 @@ class OpenAITranscriber(OpenAITool):
             )
         else:
             response = self.client.audio.transcriptions.create(
+                model=self.model_name,
+                file=audio_data,
+                **self.model_kwargs,
+            )
+        return response.text
+
+    async def _arun(self, audio: str) -> str:
+        """Run query through OpenAI async and parse result."""
+        audio_data = await AsyncPath(audio).read_bytes()
+        if self.translation:
+            response = await self.async_client.audio.translations.create(
+                model=self.model_name,
+                file=audio_data,
+                **self.model_kwargs,
+            )
+        else:
+            response = await self.async_client.audio.transcriptions.create(
                 model=self.model_name,
                 file=audio_data,
                 **self.model_kwargs,
