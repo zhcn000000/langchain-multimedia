@@ -6,7 +6,7 @@ This project leverages [LangChain](https://github.com/langchain-ai/langchain) to
 ## Features
 - Text-to-Audio/Video/Image
 - OCR  
-- Audio-to-Text
+- ASR
 - Configurable Parameters Management  
 
 ## Support Model Providers
